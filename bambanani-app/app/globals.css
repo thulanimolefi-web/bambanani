@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #eef5f4;
+  --surface: #ffffff;
+  --teal-900: #0e3a3b;
+  --teal-700: #155e5f;
+  --teal-500: #2c8c87;
+  --teal-300: #9ad1cb;
+  --teal-100: #dceeec;
+  --ink: #12201f;
+  --muted: #4c6663;
+  --gold: #d68a34;
+  --gold-ink: #241503;
+  --line: rgba(14, 58, 59, 0.14);
+  --danger: #c0433a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-teal-900: var(--teal-900);
+  --color-teal-700: var(--teal-700);
+  --color-teal-500: var(--teal-500);
+  --color-teal-300: var(--teal-300);
+  --color-teal-100: var(--teal-100);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
+  --color-danger: var(--danger);
+  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-work-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a1615;
+    --surface: #0f2322;
+    --teal-900: #eaf6f4;
+    --teal-700: #8fd4cc;
+    --teal-500: #5cb5ac;
+    --teal-300: #2c4e4b;
+    --teal-100: #173534;
+    --ink: #eaf3f1;
+    --muted: #9fbab6;
+    --line: rgba(234, 246, 244, 0.14);
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-work-sans), -apple-system, sans-serif;
+}
