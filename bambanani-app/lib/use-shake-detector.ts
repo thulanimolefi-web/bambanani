@@ -27,7 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const SHAKE_THRESHOLD = 18; // m/s^2 of combined acceleration delta
 const REQUIRED_SHAKES_TO_ARM = 3;
 const ARM_WINDOW_MS = 1500;
-const AUTO_SEND_MS = 3000; // grace period to cancel before it sends itself
+const AUTO_SEND_MS = 1200; // grace period to cancel before it sends itself — kept short on purpose
 const DEBOUNCE_MS = 250; // ignore re-triggers from the same physical shake
 
 type PermissionState = "unsupported" | "unrequested" | "granted" | "denied";
