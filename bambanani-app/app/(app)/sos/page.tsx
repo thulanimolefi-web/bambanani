@@ -66,7 +66,13 @@ export default function SosPage() {
     setState("sent");
   }, []);
 
-  const { permission, requestPermission } = useShakeDetector(
+  const {
+    permission,
+    requestPermission,
+    stage: shakeStage,
+    cancelArm,
+  } = useShakeDetector(
+    () => {}, // 3 shakes armed it — the vibration buzz is the confirmation, no extra UI hook needed
     () => triggerSos("shake"),
     shakeArmed
   );
@@ -161,8 +167,10 @@ export default function SosPage() {
       <div className="w-full rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
         <h2 className="text-sm font-bold text-[var(--teal-700)]">Shake to trigger</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">
-          For when you can&rsquo;t look at your phone: 3 sharp shakes sends the same alert. Only
-          works while Bambanani is open on screen.
+          For when you can&rsquo;t look at your phone: 3 sharp shakes gets it ready (you&rsquo;ll feel a
+          buzz), then it sends itself a few seconds later unless you cancel. If you keep shaking
+          it sends right away. This only works while Bambanani is open on screen &mdash; phones
+          don&rsquo;t let apps sense motion once they&rsquo;re closed or locked.
         </p>
         {permission === "unsupported" && (
           <p className="mt-3 text-[13px] text-[var(--muted)]">Not supported on this device.</p>
@@ -179,14 +187,27 @@ export default function SosPage() {
           </button>
         )}
         {permission === "granted" && (
-          <label className="mt-3 flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
-            <input
-              type="checkbox"
-              checked={shakeArmed}
-              onChange={(e) => setShakeArmed(e.target.checked)}
-            />
-            Shake detection armed
-          </label>
+          <>
+            <label className="mt-3 flex items-center gap-2 text-sm font-medium text-[var(--ink)]">
+              <input
+                type="checkbox"
+                checked={shakeArmed}
+                onChange={(e) => setShakeArmed(e.target.checked)}
+              />
+              Shake detection on
+            </label>
+            {shakeArmed && shakeStage === "armed" && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[var(--danger)]/10 px-3.5 py-2.5">
+                <p className="text-[13px] font-bold text-[var(--danger)]">Sending in a few seconds…</p>
+                <button
+                  onClick={cancelArm}
+                  className="shrink-0 rounded-lg border border-[var(--danger)]/40 px-3 py-1.5 text-xs font-bold text-[var(--danger)]"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

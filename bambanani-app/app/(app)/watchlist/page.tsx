@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useProximity, formatDistance } from "@/lib/use-proximity";
 
 type Entry = {
   id: string;
@@ -13,6 +14,7 @@ type Entry = {
   reporter_id: string;
   created_at: string;
   is_missing_person: boolean;
+  distance_m?: number | null;
 };
 
 type Post = {
@@ -20,7 +22,7 @@ type Post = {
   category: string;
   body: string;
   created_at: string;
-  watchlist_entry_id: string | null;
+  linked_watchlist_entry_id: string | null;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -68,31 +70,45 @@ export default function WatchlistPage() {
   const [noteDraftFor, setNoteDraftFor] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+  const { coords, status: locStatus } = useProximity();
 
   const load = useCallback(async () => {
     const supabase = createClient();
+    const entriesQuery = coords
+      ? supabase.rpc("nearby_watchlist_entries", {
+          p_lat: coords.lat,
+          p_lon: coords.lon,
+          p_radius_m: 15000,
+          p_limit: 50,
+        })
+      : supabase
+          .from("watchlist_entries")
+          .select(
+            "id, subject_name, subject_description, status, dispute_status, votes_count, reporter_id, created_at, is_missing_person"
+          )
+          .neq("status", "false")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
     const [{ data: { user } }, entriesResult, postsResult] = await Promise.all([
       supabase.auth.getUser(),
-      supabase
-        .from("watchlist_entries")
-        .select(
-          "id, subject_name, subject_description, status, dispute_status, votes_count, reporter_id, created_at, is_missing_person"
-        )
-        .neq("status", "false")
-        .order("created_at", { ascending: false })
-        .limit(50),
+      entriesQuery,
       supabase
         .from("incident_posts")
-        .select("id, category, body, created_at, watchlist_entry_id")
+        .select("id, category, body, created_at, linked_watchlist_entry_id")
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(150),
     ]);
     setUserId(user?.id ?? null);
-    const sortedEntries = (entriesResult.data || []).slice().sort((a, b) => {
-      if (a.is_missing_person !== b.is_missing_person) return a.is_missing_person ? -1 : 1;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+    // The RPC already orders by missing-person-first then distance; the plain
+    // fallback query needs the same missing-person priority applied client-side.
+    const sortedEntries = coords
+      ? ((entriesResult.data || []) as Entry[])
+      : ((entriesResult.data || []) as Entry[]).slice().sort((a: Entry, b: Entry) => {
+          if (a.is_missing_person !== b.is_missing_person) return a.is_missing_person ? -1 : 1;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
     setEntries(sortedEntries);
     setPosts(postsResult.data || []);
 
@@ -104,7 +120,7 @@ export default function WatchlistPage() {
       setVotedIds(new Set((votes || []).map((v) => v.watchlist_entry_id)));
     }
     setLoading(false);
-  }, []);
+  }, [coords]);
 
   useEffect(() => {
     load();
@@ -123,10 +139,10 @@ export default function WatchlistPage() {
   const notesByEntry = useMemo(() => {
     const map = new Map<string, Post[]>();
     for (const p of posts) {
-      if (!p.watchlist_entry_id) continue;
-      const list = map.get(p.watchlist_entry_id) || [];
+      if (!p.linked_watchlist_entry_id) continue;
+      const list = map.get(p.linked_watchlist_entry_id) || [];
       list.push(p);
-      map.set(p.watchlist_entry_id, list);
+      map.set(p.linked_watchlist_entry_id, list);
     }
     return map;
   }, [posts]);
@@ -215,7 +231,7 @@ export default function WatchlistPage() {
       is_anonymous: false,
       category,
       body: noteText.trim(),
-      watchlist_entry_id: entryId,
+      linked_watchlist_entry_id: entryId,
     });
     setSavingNote(false);
     if (error) {
@@ -287,7 +303,12 @@ export default function WatchlistPage() {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-[var(--teal-700)]">People reported</h2>
+          <div>
+            <h2 className="text-sm font-bold text-[var(--teal-700)]">People reported</h2>
+            {locStatus === "available" && (
+              <p className="text-[11px] text-[var(--muted)]">Missing persons first, then nearest to you</p>
+            )}
+          </div>
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
@@ -400,6 +421,7 @@ export default function WatchlistPage() {
                 </div>
                 <p className="text-[12px] text-[var(--muted)]">
                   {entry.votes_count} confirmation{entry.votes_count === 1 ? "" : "s"}
+                  {formatDistance(entry.distance_m) && ` · ${formatDistance(entry.distance_m)}`}
                 </p>
                 {entry.status === "active" && (
                   <div className="flex flex-wrap gap-2">

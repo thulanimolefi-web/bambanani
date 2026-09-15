@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useProximity, formatDistance } from "@/lib/use-proximity";
 
 type Broadcast = {
   id: string;
@@ -17,6 +18,7 @@ type Post = {
   body: string;
   is_anonymous: boolean;
   created_at: string;
+  distance_m?: number | null;
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -70,9 +72,24 @@ export default function IncidentFeed() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openBroadcast, setOpenBroadcast] = useState<string | null>(null);
+  const { coords, status: locStatus } = useProximity();
 
   const load = useCallback(async () => {
     const supabase = createClient();
+    const postsQuery = coords
+      ? supabase.rpc("nearby_incident_posts", {
+          p_lat: coords.lat,
+          p_lon: coords.lon,
+          p_radius_m: 15000,
+          p_limit: 40,
+        })
+      : supabase
+          .from("incident_posts")
+          .select("id, category, body, is_anonymous, created_at")
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .limit(30);
+
     const [{ data: b }, { data: p }] = await Promise.all([
       supabase
         .from("broadcasts")
@@ -80,17 +97,12 @@ export default function IncidentFeed() {
         .eq("status", "active")
         .order("created_at", { ascending: false })
         .limit(15),
-      supabase
-        .from("incident_posts")
-        .select("id, category, body, is_anonymous, created_at")
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(30),
+      postsQuery,
     ]);
     setBroadcasts(b || []);
     setPosts(p || []);
     setLoading(false);
-  }, []);
+  }, [coords]);
 
   useEffect(() => {
     load();
@@ -115,6 +127,7 @@ export default function IncidentFeed() {
       is_anonymous: anonymous,
       category,
       body: body.trim(),
+      location: coords ? `SRID=4326;POINT(${coords.lon} ${coords.lat})` : null,
     });
     setSaving(false);
     if (error) {
@@ -172,7 +185,12 @@ export default function IncidentFeed() {
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-[var(--teal-700)]">Community board</h2>
+        <div>
+          <h2 className="text-sm font-bold text-[var(--teal-700)]">Community board</h2>
+          {locStatus === "available" && (
+            <p className="text-[11px] text-[var(--muted)]">Sorted by what&rsquo;s nearest to you</p>
+          )}
+        </div>
         {!showForm && (
           <button
             onClick={() => setShowForm(true)}
@@ -261,9 +279,16 @@ export default function IncidentFeed() {
               </span>
             </div>
             <p className="mt-2 text-[14px] text-[var(--ink)]">{p.body}</p>
-            {p.is_anonymous && (
-              <p className="mt-1 text-[11px] text-[var(--muted)]">Posted anonymously</p>
-            )}
+            <div className="mt-1 flex gap-2">
+              {p.is_anonymous && (
+                <p className="text-[11px] text-[var(--muted)]">Posted anonymously</p>
+              )}
+              {formatDistance(p.distance_m) && (
+                <p className="text-[11px] font-semibold text-[var(--teal-700)]">
+                  {formatDistance(p.distance_m)}
+                </p>
+              )}
+            </div>
           </div>
         ))}
       </div>
