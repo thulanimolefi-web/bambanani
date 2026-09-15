@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 type Profile = {
   full_name: string | null;
   sa_id_number: string | null;
   trust_score: number;
+  premier_interest_at: string | null;
 };
 
 export default function ProfilePage() {
@@ -19,6 +21,8 @@ export default function ProfilePage() {
   const [duressPin, setDuressPin] = useState("");
   const [hasSafeWord, setHasSafeWord] = useState(false);
   const [hasDuressPin, setHasDuressPin] = useState(false);
+  const [premierInterested, setPremierInterested] = useState(false);
+  const [premierSaving, setPremierSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -30,19 +34,21 @@ export default function ProfilePage() {
     if (!user) return;
     setEmail(user.email || "");
 
-    const { data: p } = await supabase
-      .from("profiles")
-      .select("full_name, sa_id_number, trust_score")
-      .eq("id", user.id)
-      .single();
+    const [{ data: p }, { data: sw }, { data: dp }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("full_name, sa_id_number, trust_score, premier_interest_at")
+        .eq("id", user.id)
+        .single(),
+      supabase.rpc("has_safe_word"),
+      supabase.rpc("has_duress_pin"),
+    ]);
     if (p) {
       setProfile(p);
       setSaId(p.sa_id_number || "");
+      setPremierInterested(!!p.premier_interest_at);
     }
-
-    const { data: sw } = await supabase.rpc("has_safe_word");
     setHasSafeWord(!!sw);
-    const { data: dp } = await supabase.rpc("has_duress_pin");
     setHasDuressPin(!!dp);
   }, []);
 
@@ -99,6 +105,31 @@ export default function ProfilePage() {
     }
   }
 
+  async function togglePremierInterest() {
+    setErr(null);
+    setMsg(null);
+    setPremierSaving(true);
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setPremierSaving(false);
+      return;
+    }
+    const nextValue = !premierInterested;
+    const { error } = await supabase
+      .from("profiles")
+      .update({ premier_interest_at: nextValue ? new Date().toISOString() : null })
+      .eq("id", user.id);
+    setPremierSaving(false);
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+    setPremierInterested(nextValue);
+  }
+
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -127,13 +158,38 @@ export default function ProfilePage() {
       {msg && <p className="text-sm text-[var(--teal-700)]">{msg}</p>}
       {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
 
+      <div className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[var(--gold)] px-2.5 py-1 text-[11px] font-bold text-[var(--gold-ink)]">
+            COMING SOON
+          </span>
+          <h2 className="text-sm font-bold text-[var(--teal-700)]">Bambanani Premier</h2>
+        </div>
+        <p className="text-[13px] leading-relaxed text-[var(--muted)]">
+          An optional paid tier: no ads, an extended alert radius, and a portion of every
+          subscription going toward a gender-based violence support organisation. Core safety
+          features stay free forever either way.
+        </p>
+        <button
+          onClick={togglePremierInterest}
+          disabled={premierSaving}
+          className={
+            premierInterested
+              ? "self-start rounded-xl border border-[var(--teal-500)] px-4 py-2.5 text-sm font-bold text-[var(--teal-700)] disabled:opacity-60"
+              : "self-start rounded-xl bg-[var(--teal-900)] px-4 py-2.5 text-sm font-bold text-[var(--bg)] disabled:opacity-60"
+          }
+        >
+          {premierInterested ? "You're on the list ✓" : "Notify me when it's ready"}
+        </button>
+      </div>
+
       <form
         onSubmit={saveSaId}
         className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
       >
         <h2 className="text-sm font-bold text-[var(--teal-700)]">SA ID number</h2>
         <p className="text-[13px] text-[var(--muted)]">
-          Format-checked only for now — used later to unlock verified-voter status on the
+          Format-checked only for now. Used later to unlock verified-voter status on the
           watchlist.
         </p>
         <input
@@ -161,7 +217,7 @@ export default function ProfilePage() {
           Safe word {hasSafeWord && <span className="text-[var(--muted)] font-normal">(set)</span>}
         </h2>
         <p className="text-[13px] text-[var(--muted)]">
-          Required to close an &ldquo;are-you-safe&rdquo; check-in — so a tap alone can&rsquo;t
+          Required to close an &ldquo;are-you-safe&rdquo; check-in, so a tap alone can&rsquo;t
           dismiss it for you.
         </p>
         <input
@@ -205,7 +261,25 @@ export default function ProfilePage() {
         >
           Save
         </button>
+        {hasDuressPin && (
+          <Link href="/pin" className="text-[13px] font-semibold text-[var(--teal-700)] underline">
+            Open silent PIN entry screen →
+          </Link>
+        )}
       </form>
+
+      <Link
+        href="/contacts"
+        className="flex items-center justify-between rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
+      >
+        <div>
+          <h2 className="text-sm font-bold text-[var(--teal-700)]">Trusted contacts</h2>
+          <p className="mt-1 text-[13px] text-[var(--muted)]">
+            Manage who gets your SOS alerts and who can check in on you.
+          </p>
+        </div>
+        <span className="text-[var(--teal-700)]">→</span>
+      </Link>
 
       <button
         onClick={signOut}

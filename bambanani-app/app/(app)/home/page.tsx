@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import IncidentFeed from "@/components/incident-feed";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -25,32 +26,7 @@ export default async function HomePage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 text-center">
-        <p className="text-[14px] leading-relaxed text-[var(--muted)]">
-          The local community board — sightings, watchlist updates, and neighbourhood
-          notices — lands here next. For now, set up your trusted contacts so SOS alerts
-          have somewhere to go.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-[var(--teal-700)]">
-            SOS / duress
-          </span>
-          <p className="mt-1 text-[13px] text-[var(--muted)]">
-            Hold-to-confirm or 3-shake trigger, live now.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-[var(--teal-700)]">
-            Are-you-safe
-          </span>
-          <p className="mt-1 text-[13px] text-[var(--muted)]">
-            Safe-word check-ins are coming in the next build.
-          </p>
-        </div>
-      </div>
+      <IncidentFeed />
     </div>
   );
 }

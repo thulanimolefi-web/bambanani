@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Confirmed design: 3 sharp shakes within ~1.5s triggers SOS. A short window is
-// deliberate — real panic produces sharp, brief motion, not sustained motion, so a
+// deliberate: real panic produces sharp, brief motion, not sustained motion, so a
 // longer duration requirement would delay a genuine emergency exactly when it matters.
 const SHAKE_THRESHOLD = 18; // m/s^2 of combined acceleration delta
 const REQUIRED_SHAKES = 3;

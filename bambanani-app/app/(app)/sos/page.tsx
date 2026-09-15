@@ -20,22 +20,25 @@ export default function SosPage() {
     setState("sending");
     const supabase = createClient();
 
-    let locationValue: string | null = null;
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) =>
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
+    // Location and auth don't depend on each other, so run them at the same
+    // time instead of stacking their latency.
+    const [positionResult, userResult] = await Promise.all([
+      new Promise<GeolocationPosition | null>((resolve) =>
+        navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), {
           enableHighAccuracy: true,
           timeout: 8000,
         })
-      );
-      locationValue = `SRID=4326;POINT(${position.coords.longitude} ${position.coords.latitude})`;
-    } catch {
-      // proceed without location rather than blocking the alert
-    }
+      ),
+      supabase.auth.getUser(),
+    ]);
+
+    const locationValue = positionResult
+      ? `SRID=4326;POINT(${positionResult.coords.longitude} ${positionResult.coords.latitude})`
+      : null;
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = userResult;
     if (!user) {
       setState("error");
       return;
@@ -188,8 +191,8 @@ export default function SosPage() {
       </div>
 
       <p className="max-w-xs text-center text-xs leading-relaxed text-[var(--muted)]">
-        The silent duress PIN and automatic community escalation after 60 minutes ship next —
-        this screen already sends real alerts to your trusted contacts.
+        The silent duress PIN is set up from your profile, and check-ins auto-escalate after
+        60 minutes. This screen already sends real alerts to your trusted contacts.
       </p>
     </div>
   );

@@ -23,7 +23,7 @@ export default function LoginPage() {
     if (error) {
       setError(
         error.message === "Email not confirmed"
-          ? "Please verify your email first — check your inbox for the confirmation link."
+          ? "Please verify your email first. Check your inbox for the confirmation link."
           : "Incorrect email or password."
       );
       return;

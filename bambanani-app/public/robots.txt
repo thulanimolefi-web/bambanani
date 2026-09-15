@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /signup
+Disallow: /home
+Disallow: /sos
+Disallow: /checkins
+Disallow: /contacts
+Disallow: /watchlist
+Disallow: /profile
+Disallow: /pin
+Disallow: /auth/
+
+Sitemap: https://joinbambanani.co.za/sitemap.xml

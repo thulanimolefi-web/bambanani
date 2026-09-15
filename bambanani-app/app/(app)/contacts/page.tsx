@@ -91,7 +91,7 @@ export default function ContactsPage() {
         </h1>
         <p className="mt-1 text-[14px] text-[var(--muted)]">
           Up to 5 people. Each one can be notified on your SOS, monitor you with check-ins, or
-          both — one directional, you choose who.
+          both. It's one directional, you choose who.
         </p>
       </div>
 
