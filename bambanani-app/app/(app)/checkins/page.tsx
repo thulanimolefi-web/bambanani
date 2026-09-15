@@ -12,8 +12,8 @@ type PendingCheckIn = {
 
 type MonitorContact = {
   id: string;
-  contact_user_id: string;
-  invite_name: string | null;
+  owner_id: string;
+  owner_name: string | null;
 };
 
 type HistoryItem = {
@@ -53,20 +53,21 @@ export default function CheckInsPage() {
 
     // These three queries don't depend on each other, so fire them together
     // instead of waiting on each round trip in turn.
-    const [{ data: pendingData }, { data: contacts }, { data: historyData }] = await Promise.all([
+    const [{ data: pendingData }, { data: monitorRows }, { data: historyData }] = await Promise.all([
       supabase
         .from("check_ins")
         .select("id, status, wrong_attempts, created_at")
         .eq("owner_id", user.id)
         .eq("status", "pending")
         .order("created_at", { ascending: false }),
+      // People I can check in on: rows where *I* am the trusted contact_user_id
+      // (not owner_id — that would be backwards, it's the person who added ME).
       supabase
         .from("trusted_contacts")
-        .select("id, contact_user_id, invite_name")
-        .eq("owner_id", user.id)
+        .select("id, owner_id")
+        .eq("contact_user_id", user.id)
         .eq("is_monitor", true)
-        .eq("status", "accepted")
-        .not("contact_user_id", "is", null),
+        .eq("status", "accepted"),
       supabase
         .from("check_ins")
         .select("id, status, created_at, owner_id, initiated_by")
@@ -76,7 +77,21 @@ export default function CheckInsPage() {
         .limit(10),
     ]);
     setPending(pendingData || []);
-    setMonitorContacts(contacts || []);
+
+    const ownerIds = [...new Set((monitorRows || []).map((r) => r.owner_id))];
+    let ownerNames: Record<string, string> = {};
+    if (ownerIds.length > 0) {
+      const { data: profs } = await supabase.from("profiles").select("id, full_name").in("id", ownerIds);
+      ownerNames = Object.fromEntries((profs || []).map((p) => [p.id, p.full_name || "Contact"]));
+    }
+    setMonitorContacts(
+      (monitorRows || []).map((r) => ({
+        id: r.id,
+        owner_id: r.owner_id,
+        owner_name: ownerNames[r.owner_id] || "Contact",
+      }))
+    );
+
     setHistory(historyData || []);
 
     setLoading(false);
@@ -86,7 +101,7 @@ export default function CheckInsPage() {
     load();
   }, [load]);
 
-  async function sendCheckIn(contactUserId: string) {
+  async function sendCheckIn(ownerId: string) {
     setErr(null);
     setMsg(null);
     const supabase = createClient();
@@ -95,7 +110,7 @@ export default function CheckInsPage() {
     } = await supabase.auth.getUser();
     if (!user) return;
     const { error } = await supabase.from("check_ins").insert({
-      owner_id: contactUserId,
+      owner_id: ownerId,
       initiated_by: user.id,
     });
     if (error) {
@@ -226,9 +241,9 @@ export default function CheckInsPage() {
             key={c.id}
             className="flex items-center justify-between rounded-2xl border border-[var(--line)] bg-[var(--surface)] px-4 py-3"
           >
-            <p className="text-[15px] font-semibold text-[var(--ink)]">{c.invite_name || "Contact"}</p>
+            <p className="text-[15px] font-semibold text-[var(--ink)]">{c.owner_name}</p>
             <button
-              onClick={() => sendCheckIn(c.contact_user_id)}
+              onClick={() => sendCheckIn(c.owner_id)}
               className="rounded-lg bg-[var(--gold)] px-3.5 py-2 text-xs font-bold text-[var(--gold-ink)]"
             >
               Send check-in
