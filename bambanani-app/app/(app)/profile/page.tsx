@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { enablePush, disablePush, getPushSubscriptionState, pushSupported } from "@/lib/push";
 
 type Profile = {
   full_name: string | null;
@@ -21,6 +22,10 @@ export default function ProfilePage() {
   const [duressPin, setDuressPin] = useState("");
   const [hasSafeWord, setHasSafeWord] = useState(false);
   const [hasDuressPin, setHasDuressPin] = useState(false);
+  const [hasQuickExitPin, setHasQuickExitPin] = useState(false);
+  const [quickExitPin, setQuickExitPin] = useState("");
+  const [pushState, setPushState] = useState<"unsupported" | "subscribed" | "unsubscribed">("unsubscribed");
+  const [pushBusy, setPushBusy] = useState(false);
   const [premierInterested, setPremierInterested] = useState(false);
   const [premierSaving, setPremierSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -34,7 +39,7 @@ export default function ProfilePage() {
     if (!user) return;
     setEmail(user.email || "");
 
-    const [{ data: p }, { data: sw }, { data: dp }] = await Promise.all([
+    const [{ data: p }, { data: sw }, { data: dp }, { data: qe }, ps] = await Promise.all([
       supabase
         .from("profiles")
         .select("full_name, sa_id_number, trust_score, premier_interest_at")
@@ -42,6 +47,8 @@ export default function ProfilePage() {
         .single(),
       supabase.rpc("has_safe_word"),
       supabase.rpc("has_duress_pin"),
+      supabase.rpc("has_quick_exit_pin"),
+      getPushSubscriptionState(),
     ]);
     if (p) {
       setProfile(p);
@@ -50,6 +57,8 @@ export default function ProfilePage() {
     }
     setHasSafeWord(!!sw);
     setHasDuressPin(!!dp);
+    setHasQuickExitPin(!!qe);
+    setPushState(ps);
   }, []);
 
   useEffect(() => {
@@ -105,6 +114,42 @@ export default function ProfilePage() {
     }
   }
 
+  async function saveQuickExitPin(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setMsg(null);
+    const supabase = createClient();
+    const { error } = await supabase.rpc("set_quick_exit_pin", { pin: quickExitPin });
+    if (error) setErr(error.message);
+    else {
+      setMsg("Quick exit PIN set. Type it into the decoy screen, then press “=”, to get back in.");
+      setQuickExitPin("");
+      setHasQuickExitPin(true);
+    }
+  }
+
+  async function togglePush() {
+    setErr(null);
+    setMsg(null);
+    setPushBusy(true);
+    try {
+      if (pushState === "subscribed") {
+        await disablePush();
+        setPushState("unsubscribed");
+      } else {
+        const ok = await enablePush();
+        if (ok) {
+          setPushState("subscribed");
+          setMsg("Push notifications are on for this device.");
+        } else {
+          setErr("Couldn't turn on push notifications. Check your browser's notification permission.");
+        }
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
   async function togglePremierInterest() {
     setErr(null);
     setMsg(null);
@@ -157,6 +202,29 @@ export default function ProfilePage() {
 
       {msg && <p className="text-sm text-[var(--teal-700)]">{msg}</p>}
       {err && <p className="text-sm text-[var(--danger)]">{err}</p>}
+
+      {pushState !== "unsupported" && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+          <div>
+            <h2 className="text-sm font-bold text-[var(--teal-700)]">Push notifications</h2>
+            <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">
+              So an SOS or check-in escalation reaches you the instant it happens, even if you're
+              not in the app or checking email.
+            </p>
+          </div>
+          <button
+            onClick={togglePush}
+            disabled={pushBusy}
+            className={
+              pushState === "subscribed"
+                ? "shrink-0 rounded-xl border border-[var(--teal-500)] px-4 py-2.5 text-sm font-bold text-[var(--teal-700)] disabled:opacity-60"
+                : "shrink-0 rounded-xl bg-[var(--teal-900)] px-4 py-2.5 text-sm font-bold text-[var(--bg)] disabled:opacity-60"
+            }
+          >
+            {pushState === "subscribed" ? "On" : "Turn on"}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
         <div className="flex items-center gap-2">
@@ -266,6 +334,36 @@ export default function ProfilePage() {
             Open silent PIN entry screen →
           </Link>
         )}
+      </form>
+
+      <form
+        onSubmit={saveQuickExitPin}
+        className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
+      >
+        <h2 className="text-sm font-bold text-[var(--teal-700)]">
+          Quick exit {hasQuickExitPin && <span className="text-[var(--muted)] font-normal">(set)</span>}
+        </h2>
+        <p className="text-[13px] leading-relaxed text-[var(--muted)]">
+          A separate PIN, nothing to do with your safe word or duress PIN. Once it&rsquo;s set, a
+          quiet exit button appears at the top of every screen. Tap it and the app instantly
+          becomes a working calculator. Type this PIN into it, then press &ldquo;=&rdquo;, to get
+          straight back to Bambanani.
+        </p>
+        <input
+          type="text"
+          inputMode="numeric"
+          maxLength={6}
+          value={quickExitPin}
+          onChange={(e) => setQuickExitPin(e.target.value.replace(/\D/g, ""))}
+          placeholder={hasQuickExitPin ? "Change PIN" : "4-6 digits"}
+          className="rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-2.5 text-[15px] outline-none focus:border-[var(--teal-500)]"
+        />
+        <button
+          type="submit"
+          className="self-start rounded-xl bg-[var(--teal-900)] px-4 py-2 text-sm font-bold text-[var(--bg)]"
+        >
+          Save
+        </button>
       </form>
 
       <Link

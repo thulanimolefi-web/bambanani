@@ -44,12 +44,22 @@ self.addEventListener("push", (event) => {
     badge: "/icons/icon-192.png",
     data: { url: payload.url || "/home" },
     requireInteraction: payload.urgent === true,
+    // Notification actions aren't supported on iOS Safari, tapping the
+    // notification body itself still opens the app there. This is a
+    // progressive enhancement for Android/Chrome, not the only way in.
+    actions: payload.urgent === true ? [{ action: "call112", title: "Call 112" }] : undefined,
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
+  if (event.action === "call112") {
+    event.waitUntil(self.clients.openWindow("tel:112"));
+    return;
+  }
+
   const targetUrl = event.notification.data?.url || "/home";
   event.waitUntil(
     self.clients.matchAll({ type: "window" }).then((clients) => {

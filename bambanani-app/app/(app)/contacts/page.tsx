@@ -12,8 +12,20 @@ type Contact = {
   status: string;
 };
 
+type PendingInvite = {
+  id: string;
+  invite_name: string | null;
+  inviter_name: string | null;
+  is_ice: boolean;
+  is_monitor: boolean;
+  invited_at: string;
+};
+
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,9 +50,25 @@ export default function ContactsPage() {
     setLoading(false);
   }, []);
 
+  const loadInvites = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.rpc("list_my_pending_invites");
+    setInvites(data || []);
+    setInvitesLoading(false);
+  }, []);
+
   useEffect(() => {
     load();
-  }, [load]);
+    loadInvites();
+  }, [load, loadInvites]);
+
+  async function respondToInvite(id: string, accept: boolean) {
+    setRespondingTo(id);
+    const supabase = createClient();
+    await supabase.rpc("respond_to_invite", { p_invite_id: id, p_accept: accept });
+    setRespondingTo(null);
+    loadInvites();
+  }
 
   async function addContact(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +123,46 @@ export default function ContactsPage() {
         </p>
       </div>
 
+      {!invitesLoading && invites.length > 0 && (
+        <div className="flex flex-col gap-2.5">
+          <h2 className="text-sm font-bold text-[var(--teal-700)]">Invited you</h2>
+          {invites.map((inv) => {
+            const roles = [inv.is_ice && "notify you on their SOS", inv.is_monitor && "let you check in on them"]
+              .filter(Boolean)
+              .join(" and ");
+            return (
+              <div
+                key={inv.id}
+                className="rounded-2xl border border-[var(--gold)]/60 bg-[var(--gold)]/10 p-4"
+              >
+                <p className="text-[15px] font-semibold text-[var(--ink)]">
+                  {inv.inviter_name || "Someone"} wants to add you as a trusted contact
+                </p>
+                <p className="mt-1 text-[13px] text-[var(--muted)]">
+                  This would {roles || "keep you connected on their safety"}.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => respondToInvite(inv.id, true)}
+                    disabled={respondingTo === inv.id}
+                    className="rounded-xl bg-[var(--teal-900)] px-4 py-2 text-sm font-bold text-[var(--bg)] disabled:opacity-60"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => respondToInvite(inv.id, false)}
+                    disabled={respondingTo === inv.id}
+                    className="rounded-xl border border-[var(--line)] px-4 py-2 text-sm font-semibold text-[var(--muted)] disabled:opacity-60"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <form
         onSubmit={addContact}
         className="flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
@@ -138,6 +206,8 @@ export default function ContactsPage() {
           {saving ? "Sending invite..." : "Send invite"}
         </button>
       </form>
+
+      <h2 className="text-sm font-bold text-[var(--teal-700)]">People you&rsquo;ve added</h2>
 
       <div className="flex flex-col gap-2.5">
         {loading && <p className="text-sm text-[var(--muted)]">Loading…</p>}

@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useShakeDetector } from "@/lib/use-shake-detector";
+import FakeCall from "@/components/fake-call";
+
+const EMERGENCY_NUMBERS = [
+  { label: "Call 112", sub: "Any network, nearest service", tel: "112" },
+  { label: "SAPS", sub: "10111", tel: "10111" },
+  { label: "Ambulance / Fire", sub: "10177", tel: "10177" },
+  { label: "GBV Command Centre", sub: "0800 428 428", tel: "0800428428" },
+];
 
 const HOLD_MS = 1200;
 
@@ -120,9 +128,26 @@ export default function SosPage() {
         <p className="max-w-xs text-[15px] text-[var(--muted)]">
           Your trusted contacts are being notified with your location. Stay safe.
         </p>
+
+        <div className="mt-2 w-full max-w-xs rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 p-4 text-left">
+          <p className="text-[13px] font-bold text-[var(--danger)]">Need real emergency help right now?</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {EMERGENCY_NUMBERS.map((n) => (
+              <a
+                key={n.tel}
+                href={`tel:${n.tel}`}
+                className="flex flex-col rounded-xl bg-[var(--danger)] px-3 py-2.5 text-white"
+              >
+                <span className="text-[13px] font-bold">{n.label}</span>
+                <span className="text-[11px] text-white/80">{n.sub}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
         <button
           onClick={cancelAlert}
-          className="mt-4 rounded-xl border border-[var(--line)] px-5 py-2.5 text-sm font-semibold text-[var(--muted)]"
+          className="mt-2 rounded-xl border border-[var(--line)] px-5 py-2.5 text-sm font-semibold text-[var(--muted)]"
         >
           This was a false alarm
         </button>
@@ -191,6 +216,8 @@ export default function SosPage() {
           </label>
         )}
       </div>
+
+      <FakeCall />
 
       <p className="max-w-xs text-center text-xs leading-relaxed text-[var(--muted)]">
         The silent duress PIN is set up from your profile, and check-ins auto-escalate after
